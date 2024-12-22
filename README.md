@@ -278,3 +278,20 @@
       document.title = `You clicked ${count} times`;
     }, [count]); // count가 변경될 때마다 effect가 실행됨
     ```
+  - 이는 정리를 사용하는 effect의 경우에도 동일하게 적용됨
+    ```jsx
+    useEffect(() => {
+      function handleStatusChange(status) {
+        setIsOnline(status.isOnline);
+      }
+      ChatAPI.subscribeToFriendStatus(props.friend.id, handleStatusChange);
+      return () => {
+        ChatAPI.unsubscribeFromFriendStatus(
+          props.friend.id,
+          handleStatusChange
+        );
+      };
+    }, [props.friend.id]); // props.friend.id가 변경될 때마다 effect가 실행됨
+    ```
+
+## Hook의 규칙
