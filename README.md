@@ -550,11 +550,184 @@ const value = useContext(MyContext);
 
 #### useReducer
 
+```javascript
+const [state, dispatch] = useReducer(reducer, initialArg, init);
+```
+
+- `useState`의 대체 함수
+- `(state, action) => newState` 형태로 reducer를 받고 `dispatch` 메서드와 짝의 형태로 현재 state를 반환
+- 다수의 하윗값을 포함하는 복잡한 저적 로직을 만드는 경우, 다음 stat가 이전 state에 의존적인 경우에 보통 `useState`보다 `useReducer`를 선호
+- 콜백 대신 dispatch를 전달할 수 있으므로, 자세한 업데이트를 트리거 하는 컴포넌트의 성능을 최적화할 수 있음
+- React는 `dispatch` 함수의 동일성이 안정적이고 리렌더링 시에도 변경되지 않으리라는 것을 보장함
+
+  - `useEffect`나 `useCallbck` 의존성 목록에 이 함수를 포함하지 않아도 무방한 이유
+
+- 초기 state의 구체화
+  - `useReducer` state의 초기화에는 두 가지 방법이 있음
+    1. 초기 state를 두 번째 인자로 전달
+    ```jsx
+    const [state, dispatch] = useReducer(reducer, { count: initialCount });
+    ```
+    - React에서는 Reducer의 인자로써 `state = initialState`와 같은 초기값을 나타내는, Redux에서느 보편화된 관습을 사용하지 않음
+    - 때때로 초기값은 props에 의존할 필요가 있어 Hook 호출에서 지정되기도 함
+    - 초기값을 나타내는 것이 정말 필요핟면 `useReducer(reducer, undefined, reducer)`를 호출하는 방법으로 Redux를 모방할 수는 있겠지만, 권장되는 방법은 아님
+- 초기화 지연
+
+  - `init` 함수를 세 번째 인자로 전달
+  - 초기 state는 `init(initialArg)에 설정될 것
+
+  ```jsx
+  function init(initialCount) {
+    return { count: initialCount };
+  }
+
+  function reducer(state, action) {
+    switch (action.type) {
+      case "increment":
+        return { count: state.count + 1 };
+      case "decrement":
+        return { count: state.count - 1 };
+      case "reset":
+        return init(action.payload);
+      default:
+        throw new Error();
+    }
+  }
+
+  function Counter({ initialCount }) {
+    const [state, dispatch] = useReducer(reducer, initialCount, init);
+
+    return (
+      <>
+        Count: {state.count}
+        <button
+          onClick={() => dispatch({ type: "reset", payload: initialCount })}
+        >
+          Reset
+        </button>
+        <button onClick={() => dispatch({ type: "increment" })}>+</button>
+        <button onClick={() => dispatch({ type: "decrement" })}>-</button>
+      </>
+    );
+  }
+  ```
+
+- dispatch의 회피
+  - Reducer Hook에서 현재 state와 같은 값을 반환하는 경우 React는 자식을 리렌더링하거나 effect를 발생하지 않고 이것들을 회피할 것
+
 #### useCallback
+
+```javascript
+const memoizedCallback = useCallback(() => {
+  doSomething(a, b);
+}, [a, b]);
+```
+
+- 메모이제이션된 콜백을 반환
+- 함수를 메모이제이션
+- 인라인 콜백과 그것의 의존성 값의 배열을 전달
+- 메모이제이션된 버전은 콜백의 의존성이 변경되었을 때에만 변경됨
+  - 불필요한 렌더링을 방지하기 위해 참조의 동일성에 의존적인 최적화된 자식 컴포넌트에 콜백을 전달할 때 유용
+- `useCallback(fn, deps)`는 `useMemo(() => fn, deps)`와 동일
+
+```jsx
+import React, { useState, useCallback } from "react";
+
+function Counter() {
+  const [count, setCount] = useState(0);
+
+  const increment = useCallback(() => {
+    setCount((prev) => prev + 1);
+  }, []); // 빈 배열이므로 항상 같은 함수 참조 유지
+
+  return <button onClick={increment}>Count: {count}</button>;
+}
+```
 
 #### useMemo
 
+```javascript
+const memoizedValue = useMemo(() => computeExpensiveValue(a, b), [a, b]);
+```
+
+- 메모이제이션된 값을 반환
+- 값을 메모이제이션
+- 생성 함수와 그것의 의존성 값의 배열을 전달
+- `useMemo`는 의존성이 변경되었을 때에만 메모이제이션된 값만 다시 계산
+  - 모든 렌더링 시의 고비용 계산을 방지하게 해줌
+- `useMemo`로 전달된 함수는 렌더링 중에 실행되므로, 통상적으로 렌더링 중에는 하지 않는 것을 이 함수 내에서 하지 말 것
+  - Side Effects는 `useEffect`에서 하는 일이지 `useMemo`에서 하는 일이 아님
+- 배열이 없는 경우 매 렌더링 때마다 새 값을 계산하게 될 것
+- useMemo는 성능 최적화를 위해 사용할 수는 있지만 의미상으로 보장이 있다고는 생각하면 안됨
+- 가까운 미래의 React에서는 이 함수를 사용하지 않을 가능성이 있으므로, `useMemo`를 사용하지 않고도 동작할 수 있도록 코드를 작성하고 그것을 추가하여 성능을 최적화해라
+- 의존성 값의 배열은 함수에 인자로 전달되지는 않으나, 함수 안에서 참조되는 모든 값은 의존성 값의 배열에 나타나야 함
+
+```jsx
+import React, { useState, useMemo } from "react";
+
+function ExpensiveCalculation() {
+  const [number, setNumber] = useState(0);
+  const [toggle, setToggle] = useState(false);
+
+  const factorial = useMemo(() => {
+    console.log("Factorial 계산 중...");
+    const calc = (n) => (n <= 1 ? 1 : n * calc(n - 1));
+    return calc(number);
+  }, [number]); // `number`가 변경될 때만 재계산
+
+  return (
+    <div>
+      <input
+        type="number"
+        value={number}
+        onChange={(e) => setNumber(parseInt(e.target.value) || 0)}
+      />
+      <p>Factorial: {factorial}</p>
+      <button onClick={() => setToggle(!toggle)}>
+        Toggle: {toggle.toString()}
+      </button>
+    </div>
+  );
+}
+```
+
 #### useRef
+
+```javascript
+const refContainer = useRef(initialValue);
+```
+
+- `useRef`는 `.curren` 프로퍼티로 전달된 인자(`initialValue`)로 초기화된 변경 가능한 ref 객체를 반환
+- 반환된 개체는 컴포넌트의 전 생애주기를 통해 유지될 것
+
+```jsx
+function TextInputWithFocusButton() {
+  const inputRef = useRef(null);
+
+  const handleFocus = () => {
+    inputRef.current.focus();
+  };
+
+  return (
+    <>
+      <input ref={inputRef} type="text" />
+      <button onClick={handleFocus}>Focus Input</button>
+    </>
+  );
+}
+```
+
+- 본질적으로 `useRef`는 `.current` 프로퍼티에 변경 가능한 값을 담고 있는 "상자"와 같으
+- 보통 DOM에 접근하는 방법으로 refs에 친숙
+  - `<div ref={myRef} />`를 사용하여 React로 ref 객체를 전달한다면, React는 노드가 변경될 때마다 변경된 DOM 노드에 그것의 `.current` 프로퍼티를 설정할 것
+- 그럼에도, `ref` 속성보다 `useRef()`가 더 유용
+  - 클래스에서 인스턴스 필드를 사요하는 바업과 유사한 어떤 가변값을 유지하는 데에 편리
+  - `useRef()`가 순수 자바스크립트 객체를 생성하기 때문
+- 컴포넌트가 리렌더링될 때마다 새로운 객체를 생성하지 않음
+  - `useRef()`와 `{ current: ...}` 객체 자체를 생성하는 것의 유일한 차이점은 `useRef`는 매번 렌더링할 때 동일한 ref 객체를 제공하는 것
+- `useRef`는 내용이 변경될 때 그것을 알려주지는 않음
+  - `.current` 프로퍼티를 변형하는 것이 리렌더링을 발생시키지는 않음
+- React가 DOM 노드에 ref를 ttach하거나 detach할 때 어떤 콛를 실행하고 싶다면 대신 콜백 ref를 사용할 것
 
 #### useImperativeHandle
 
@@ -573,7 +746,3 @@ const value = useContext(MyContext);
 #### useSyncExternalStore
 
 #### useInsertionEffect
-
-```
-
-```
