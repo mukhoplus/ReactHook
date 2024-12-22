@@ -295,3 +295,104 @@
     ```
 
 ## Hook의 규칙
+
+- 최상위(at the Top Level)에서만 Hook을 호출해야 함
+  - 반복문, 조건문, 중첩된 함수 내에서 Hook을 호출하지 않아야 함
+- 오직 React 함수 내에서 Hook을 호출해야 함
+  - 일반 자바스크립트 함수에서 Hook을 호출하지 않아야 함
+  - 커스텀 Hook을 만들 때에는 기존의 Hook들을 사용하여 만들어야 함
+
+## Custom Hook
+
+- 컴포넌트 로직을 함수로 뽑아내어 재사용할 수 있음
+- 두 개의 자바스크립트 함수에서 같은 로직을 공유하고자 할 때는 또 다른 함수로 분리함
+- Custom Hook은 이름이 use로 시작하는 자바스크립트 함수로, 다른 Hook을 호출할 수 있음
+
+  ```javascript
+  // Custom Hook
+  import [ useState, useEffect} from 'react';
+
+  function useFriendStatus(friendID) {
+    const [isOnline, setIsOnline] = useState(null);
+
+    useEffect(() => {
+      const handleStatusChange = (status) => {
+        setIsOnline(status.isOnline);
+      };
+    });
+
+    ChatAPI.subscribeToFriendStatus(friendID, handleStatusChange);
+    return () => {
+      ChatAPI.unsubscribeFromFriendStatus(friendID, handleStatusChange);
+    };
+
+    return isOnline;
+  }
+
+  // Using Custom Hook
+  function FriendStatus(props) {
+    const isOnline = useFriendStatus(props.friend.id);
+
+    if (isOnline === null) {
+      return "Loading...";
+    }
+    return isOnline ? "Online" : "Offline";
+  }
+
+  function FriendListItem(props) {
+    const isOnline = useFriendStatus(props.friend.id);
+
+    return (
+      <li style={{ color: isOnline ? "green" : "black" }}>{props.friend.name}</li>
+    );
+  }
+  ```
+
+- Custom Hook은 React의 특별한 기능이라기보다 기본적으로 Hook의 디자인을 따르는 관습
+- 이때, **같은 Hook을 사용하는 두 개의 컴포넌트는 같은 state를 공유하지 않음**
+  - 각 컴포넌트 안의 state와 effect는 완전히 독립적임
+  - 하나의 컴포넌트 안에서 useState와 useEffect를 여러 번 부를 수 있고, 이들은 모두 완전히 독립적
+- Hook은 함수이기 때문에 Hook 사이에서도 정보를 전달할 수 있음
+- useReducer / Redux reducer
+
+  - useState는 업데이트 로직을 모아주는 데에 도움이 되지 않음
+  - 독립적으로 테스트하기에 편리하며 복잡한 업데이트 로직의 표현이 늘어나는 경우에 잘 맞음
+
+  ```javascript
+  function todosReducer(state, action) {
+    switch (action.type) {
+      case "add":
+        return [
+          ...state,
+          {
+            text: action.text,
+            completed: false,
+          },
+        ];
+      // ... other actions ...
+      default:
+        return state;
+    }
+  }
+
+  function useReducer(reducer, initialState) {
+    const [state, setState] = useReducer(initialState);
+
+    function dispatch(action) {
+      const nextState = reducer(state, action);
+      setState(nextState);
+    }
+
+    return [state, dispatch];
+  }
+
+  function Todos() {
+    const [todos, dispatch] = useReducer(todosReducer, []);
+
+    function handleAddClick(text) {
+      dispatch({ type: "add", text });
+    }
+
+    // ...
+  }
+  ```
