@@ -396,3 +396,184 @@
     // ...
   }
   ```
+
+## Hook API Reference
+
+### 기본 Hook
+
+#### useState
+
+```javascript
+const [state, setState] = useState(initialState);
+```
+
+- 상태 유지 값과 그 값을 갱신하는 함수 반환
+- 최초로 렌더링을 하는 동안, 반환된 `state`는 첫 번째 전달된 인자(`initialState`)의 값과 같음
+- `setState` 함수는 state를 갱신할 때 사용하며, 새 state 값을 받아 컴포넌트 리렌더링을 큐에 등록함
+  ```javascript
+  setState(newState);
+  ```
+  - React는 `setState` 함수 동일성이 안정적이고 리렌더링 시에도 변경되지 않을 것이라는 것을 보장함
+  - 이것은 `useEffect`나 `useCallbck` 의존성 목록에 이 함수를 포함하지 않아도 무방한 이유
+- 함수적 갱신
+  - 이전 state를 사용해서 새로운 state를 계산하는 경우 함수를 setState로 전달할 수 있음
+  - 이전 값을 받아 갱신된 값을 반환
+  ```jsx
+  function Counter({ initialCount }) {
+    const [count, setCount] = useState(initialCount);
+    return (
+      <>
+        Count: {count}
+        <button onClick={() => setCount(initialCount)}>Reset</button>
+        <button onClick={() => setCount((prevCount) => prevCount - 1)}>
+          -
+        </button>
+        <button onClick={() => setCount((prevCount) => prevCount + 1)}>+</button>
+      </>
+    );
+  }
+  ```
+- 지연 초기 state
+  - `initialState` 인자는 초기 렌더링 시에 사용하는 state
+  - 초기 state가 고비용 계산의 결과라면, 초기 렌더링 시에만 실행될 함수를 대신 제공할 수 있음
+  ```jsx
+  const [state, setState] = useState(() => {
+    const initialState = someExpensiveComputation(props);
+    return initialState;
+  });
+  ```
+- state 갱신의 취소
+  - State Hook을 현재의 state와 동일한 값으로 갱신하는 경우, React는 이를 무시하고 그 처리를 종료
+    - 이때, React는 Object.is 비교 알고리즘을 사용
+  - 렌더링 시에 고비용의 계산을 하고 있다면 `useMemo`를 사용하여 그것들을 최적화할 수 있음
+
+#### useEffect
+
+```javascript
+useEffect(didUpdate);
+```
+
+- 명령형 또는 어떤 effect를 발생하는 함수를 인자로 받음
+- `useEffect`에 전달된 함수는 화면에 렌더링이 완료된 후에 수행되게 됨
+- 기본적으로 동작은 모든 렌더링이 완료된 후에 수행되나, **어떤 값이 변경되었을 때만 실행되기 할 수도 있음**
+- effect 정리
+  - effect는 종종 컴포넌트가 화면에서 제거될 때 정리해야 하는 리소스(구독, 타이머 ID 등)를 만듬
+  - 이를 수행하기 위해 useEffect에 전달된 함수는 정리(clean-up) 함수를 반환할 수 있음
+    ```jsx
+    useEffect(() => {
+      const subscription = props.source.subscribe();
+      return () => {
+        subscription.unsubscribe();
+      };
+    });
+    ```
+  - 정리 함수는 메모리 누수 방지를 위해 UI에서 컴포넌트를 제거하기 전에 수행됨
+  - 컴포넌트가 여러 번 렌더링 된다면, 다음 effect가 수행되기 전에 이전 effect는 정리됨
+- effect 타이밍
+  - `componentDidMount`와 `componetDidUpdate`와는 다르게, `useEffect`로 전달된 함수는 지연 이벤트 동안에 레이아웃 배치와 그리기를 완료한 **후** 발생함
+  - 모든 effect가 지연될 수는 없음
+    - 사용자에게 노출되는 DOM 변경은 사용자가 노출된 내용의 불일치를 경험하지 않도록 다음 화면을 다 그리기 이전에 동기화되어야 함
+    - 이런 종류의 effect를 위해 React는 useLayoutEffect라는 추가적인 Hook을 제공
+- 조건부 effect 발생
+  - effect의 기본 동작은 모든 렌더링을 완료한 후 effect를 발생하는 것
+  - 하지만 일부 경우에서는 과도한 작업일 수 있음
+  - 이것을 수행하기 위해서는 `useEffect`에 두 번째 인자를 전달
+    ```jsx
+    // 이 작업은 props.source가 변경될 때에만 구독을 재생성함
+    useEffect(() => {
+      const subscription = props.source.subscribe();
+      return () => {
+        subscription.unsubscribe();
+      };
+    }, [props.source]);
+    ```
+
+#### useContext
+
+```javascript
+const value = useContext(MyContext);
+```
+
+- context 객체(`React.createContxt`에서 반환된 값)을 받아 그 context의 현재 값을 반환함
+- context의 현재 값은 트리 안에서 이 Hook을 호출하는 컴포넌트에가장 가까이에 있는 `<MyContext.Provider>`의 `value` prop에 의해 결정됨
+- 컴포넌트에서 가장 가까운 `<MyContext.Provider>`가 갱신되면 이 Hook은 그 `MyContext` provider에게 전달된 가장 최신의 context `value`를 사용하여 렌더러를 트리거함
+  - 이때, 상위 컴포넌트에서 `React.memo` 또는 `shouldComponentUpdate`를 사용하더라도 `useContext` 컴포넌트 자체에서부터 다시 렌더링됨
+- `useContext`로 전달한 인자는 `context 객체 그 자체`이어야 함
+  `useContext(MyContext)`
+- `useContext`를 호출한 컴포넌트는 context 값이 변경되면 항상 리렌더링 될 것
+- 컴포넌트를 리렌더링 하는 것에 비용이 많이 든다면, 메모이제이션을 사용하여 최적화할 수 있음
+- `useContext(MyContext)`는 context를 읽고 context의 변경을 구독하는 것만 가능
+  - context의 값을 설정하기 위해서는 여전히 트리의 윗 계층에서의 `<MyContext.Provider>`가 필요
+- **`useContext`를 `Context.Provider`와 같이 사용하라**
+
+  ```jsx
+  const themes = {
+    light: {
+      foreground: "#000000",
+      background: "#eeeeee",
+    },
+    dark: {
+      foreground: "#ffffff",
+      background: "#222222",
+    },
+  };
+
+  const ThemeContext = React.createContext(themes.light);
+
+  function App() {
+    return (
+      <ThemeContext.Provider value={themes.dark}>
+        <ThemedButton />
+      </ThemeContext.Provider>
+    );
+  }
+
+  function Toolbar() {
+    return (
+      <div>
+        <ThemedButton />
+      </div>
+    );
+  }
+
+  function ThemedButton() {
+    const theme = useContext(ThemeContext);
+    return (
+      <button style={{ background: theme.background, color: theme.foreground }}>
+        I am styled by theme context!
+      </button>
+    );
+  }
+  ```
+
+### 추가 Hook
+
+#### useReducer
+
+#### useCallback
+
+#### useMemo
+
+#### useRef
+
+#### useImperativeHandle
+
+#### useLayoutEffect
+
+#### useDebugValue
+
+#### useDeferredValue
+
+#### useTransition
+
+#### useId
+
+### Library Hooks
+
+#### useSyncExternalStore
+
+#### useInsertionEffect
+
+```
+
+```
